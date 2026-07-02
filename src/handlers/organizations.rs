@@ -64,9 +64,6 @@ pub async fn create_organization(
         "INSERT INTO permissions (role_id, action) VALUES 
         ($1, 'organization:update'), 
         ($1, 'role:create'), 
-        ($1, 'permission:assign'),
-        ($1, 'organization:update'), 
-        ($1, 'role:create'), 
         ($1, 'role:update'), 
         ($1, 'role:delete'), 
         ($1, 'permission:assign'), 
@@ -86,8 +83,8 @@ pub async fn create_organization(
     )
     .execute(&mut *tx)
     .await?;
-
     tx.commit().await?;
+
     log_action(
         &state.pool,
         Some(current_user_id),
@@ -96,9 +93,9 @@ pub async fn create_organization(
         &format!("org_name: {}", org.name),
     )
     .await;
+
     Ok(Json(org))
 }
-
 pub async fn list_orgs(
     State(state): State<AppState>,
     Extension(_current_user_id): Extension<i64>,
