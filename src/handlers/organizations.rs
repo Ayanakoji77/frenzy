@@ -1,3 +1,4 @@
+use crate::handlers::audit::log_action;
 use crate::repositories::rbac::has_permission;
 use crate::{errors::AppError, models::Organization, state::AppState};
 use axum::{
@@ -87,7 +88,14 @@ pub async fn create_organization(
     .await?;
 
     tx.commit().await?;
-
+    log_action(
+        &state.pool,
+        Some(current_user_id),
+        Some(org.id),
+        "organization.created",
+        &format!("org_name: {}", org.name),
+    )
+    .await;
     Ok(Json(org))
 }
 

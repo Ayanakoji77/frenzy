@@ -12,7 +12,7 @@ pub struct UpdateUserPayload {
 
 pub async fn get_me(
     State(state): State<AppState>,
-                    Extension(current_user_id): Extension<i64>,
+    Extension(current_user_id): Extension<i64>,
 ) -> Result<Json<Value>, AppError> {
     let user = sqlx::query!(
         "SELECT id, username, created_at FROM users WHERE id = $1",
@@ -30,8 +30,8 @@ pub async fn get_me(
 
 pub async fn update_profile(
     State(state): State<AppState>,
-                            Extension(current_user_id): Extension<i64>,
-                            Json(payload): Json<UpdateUserPayload>,
+    Extension(current_user_id): Extension<i64>,
+    Json(payload): Json<UpdateUserPayload>,
 ) -> Result<Json<Value>, AppError> {
     let user = sqlx::query!(
         "UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username",

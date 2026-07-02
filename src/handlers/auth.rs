@@ -1,11 +1,12 @@
+use crate::handlers::audit::log_action;
 use crate::services::jwt::{generate_access_token, generate_refresh_token};
 use crate::{errors::AppError, state::AppState};
 use axum::{Json, extract::State};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use serde_json::{Value, json};
 use axum::extract::Extension;
+use serde_json::{Value, json};
 
 use argon2::{
     Argon2,
@@ -29,7 +30,6 @@ pub struct TokenResponse {
     pub access_token: String,
     pub refresh_token: String,
 }
-
 
 #[derive(Deserialize)]
 pub struct RefreshPayload {
@@ -63,7 +63,14 @@ pub async fn register(
         }
         AppError::from(e)
     })?;
-
+    log_action(
+        &state.pool,
+        Some(user.id),
+        None,
+        "user.registered",
+        &format!("user_id: {}", user.id),
+    )
+    .await;
     Ok(Json(UserResponse {
         id: user.id,
         username: user.username,
@@ -111,7 +118,14 @@ pub async fn login(
     )
     .execute(&state.pool)
     .await?;
-
+    log_action(
+        &state.pool,
+        Some(user.id),
+        None,
+        "user.logged_in",
+        "session_created",
+    )
+    .await;
     Ok(Json(TokenResponse {
         access_token,
         refresh_token,
@@ -120,7 +134,7 @@ pub async fn login(
 
 pub async fn refresh(
     State(state): State<AppState>,
-                     Json(payload): Json<RefreshPayload>,
+    Json(payload): Json<RefreshPayload>,
 ) -> Result<Json<Value>, AppError> {
     let session = sqlx::query!(
         "SELECT user_id, expires_at FROM sessions WHERE refresh_token = $1",
@@ -145,11 +159,11 @@ pub async fn refresh(
 
 pub async fn logout(
     State(state): State<AppState>,
-                    Extension(current_user_id): Extension<i64>,
+    Extension(current_user_id): Extension<i64>,
 ) -> Result<Json<Value>, AppError> {
     sqlx::query!("DELETE FROM sessions WHERE user_id = $1", current_user_id)
-    .execute(&state.pool)
-    .await?;
+        .execute(&state.pool)
+        .await?;
 
     Ok(Json(json!({"message": "Successfully logged out"})))
 }
