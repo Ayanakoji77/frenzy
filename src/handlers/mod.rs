@@ -4,11 +4,13 @@ pub mod permissions;
 pub mod roles;
 pub mod sessions;
 pub mod users;
+
 use crate::middleware::auth::require_auth;
 use crate::state::AppState;
 use axum::{
-    Router, middleware,
-    routing::{delete, get, post},
+    Router,
+    middleware,
+    routing::{delete, get, patch, post}, // Added `patch` to imports
 };
 
 pub fn app_router(state: AppState) -> Router {
@@ -19,7 +21,7 @@ pub fn app_router(state: AppState) -> Router {
         .route("/auth/refresh", post(users::refresh));
 
     let protected_routes = Router::new()
-        .route("/users/me", get(users::get_me))
+        .route("/users/me", get(users::get_me).patch(users::update_profile))
         .route("/auth/logout", post(users::logout))
         .route(
             "/organizations",
@@ -31,6 +33,8 @@ pub fn app_router(state: AppState) -> Router {
         )
         .route("/sessions", get(sessions::list_sessions))
         .route("/sessions/:id", delete(sessions::revoke_session))
+        .route("/roles", post(roles::create_role))
+        .route("/permissions", post(permissions::assign_permission))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     Router::new()
