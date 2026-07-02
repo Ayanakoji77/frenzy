@@ -28,17 +28,22 @@ pub struct PaginatedResponse<T> {
     pub total: i64,
 }
 
+
 pub async fn create_organization(
     State(state): State<AppState>,
-    Extension(_current_user_id): Extension<i64>,
-    Json(payload): Json<CreateOrgPayload>,
+                                 Extension(current_user_id): Extension<i64>,
+                                 Json(payload): Json<CreateOrgPayload>,
 ) -> Result<Json<Organization>, AppError> {
+
+
+    let mut tx = state.pool.begin().await?;
+
     let org = sqlx::query_as!(
         Organization,
         "INSERT INTO organizations (name) VALUES ($1) RETURNING id, name, created_at",
-        payload.name
+                              payload.name
     )
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| {
         if let sqlx::Error::Database(db_err) = &e {
@@ -48,6 +53,36 @@ pub async fn create_organization(
         }
         AppError::from(e)
     })?;
+
+
+    let role_record = sqlx::query!(
+        "INSERT INTO roles (organization_id, name) VALUES ($1, $2) RETURNING id",
+                                   org.id,
+                                   "Owner"
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+
+    sqlx::query!(
+        "INSERT INTO permissions (role_id, action) VALUES ($1, 'organization:update'), ($1, 'role:create'), ($1, 'permission:assign')",
+                 role_record.id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+
+    sqlx::query!(
+        "INSERT INTO memberships (user_id, organization_id, role_id) VALUES ($1, $2, $3)",
+                 current_user_id,
+                 org.id,
+                 role_record.id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+
+    tx.commit().await?;
 
     Ok(Json(org))
 }

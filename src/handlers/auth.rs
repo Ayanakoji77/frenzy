@@ -4,6 +4,9 @@ use axum::{Json, extract::State};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 
+use serde_json::{Value, json};
+use axum::extract::Extension;
+
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
@@ -24,6 +27,12 @@ pub struct UserResponse {
 #[derive(Serialize)]
 pub struct TokenResponse {
     pub access_token: String,
+    pub refresh_token: String,
+}
+
+
+#[derive(Deserialize)]
+pub struct RefreshPayload {
     pub refresh_token: String,
 }
 
@@ -107,4 +116,40 @@ pub async fn login(
         access_token,
         refresh_token,
     }))
+}
+
+pub async fn refresh(
+    State(state): State<AppState>,
+                     Json(payload): Json<RefreshPayload>,
+) -> Result<Json<Value>, AppError> {
+    let session = sqlx::query!(
+        "SELECT user_id, expires_at FROM sessions WHERE refresh_token = $1",
+        payload.refresh_token
+    )
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::Unauthorized("Invalid refresh token".into()))?;
+
+    if session.expires_at < Utc::now() {
+        return Err(AppError::Unauthorized("Refresh token expired".into()));
+    }
+
+    let new_access_token = generate_access_token(
+        session.user_id,
+        &state.config.jwt_secret,
+        state.config.jwt_access_expiry_minutes,
+    )?;
+
+    Ok(Json(json!({ "access_token": new_access_token })))
+}
+
+pub async fn logout(
+    State(state): State<AppState>,
+                    Extension(current_user_id): Extension<i64>,
+) -> Result<Json<Value>, AppError> {
+    sqlx::query!("DELETE FROM sessions WHERE user_id = $1", current_user_id)
+    .execute(&state.pool)
+    .await?;
+
+    Ok(Json(json!({"message": "Successfully logged out"})))
 }
