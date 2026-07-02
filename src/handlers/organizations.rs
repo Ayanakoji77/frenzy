@@ -28,20 +28,17 @@ pub struct PaginatedResponse<T> {
     pub total: i64,
 }
 
-
 pub async fn create_organization(
     State(state): State<AppState>,
-                                 Extension(current_user_id): Extension<i64>,
-                                 Json(payload): Json<CreateOrgPayload>,
+    Extension(current_user_id): Extension<i64>,
+    Json(payload): Json<CreateOrgPayload>,
 ) -> Result<Json<Organization>, AppError> {
-
-
     let mut tx = state.pool.begin().await?;
 
     let org = sqlx::query_as!(
         Organization,
         "INSERT INTO organizations (name) VALUES ($1) RETURNING id, name, created_at",
-                              payload.name
+        payload.name
     )
     .fetch_one(&mut *tx)
     .await
@@ -54,33 +51,40 @@ pub async fn create_organization(
         AppError::from(e)
     })?;
 
-
     let role_record = sqlx::query!(
         "INSERT INTO roles (organization_id, name) VALUES ($1, $2) RETURNING id",
-                                   org.id,
-                                   "Owner"
+        org.id,
+        "Owner"
     )
     .fetch_one(&mut *tx)
     .await?;
 
-
     sqlx::query!(
-        "INSERT INTO permissions (role_id, action) VALUES ($1, 'organization:update'), ($1, 'role:create'), ($1, 'permission:assign')",
-                 role_record.id
+        "INSERT INTO permissions (role_id, action) VALUES 
+        ($1, 'organization:update'), 
+        ($1, 'role:create'), 
+        ($1, 'permission:assign'),
+        ($1, 'organization:update'), 
+        ($1, 'role:create'), 
+        ($1, 'role:update'), 
+        ($1, 'role:delete'), 
+        ($1, 'permission:assign'), 
+        ($1, 'permission:delete'), 
+        ($1, 'member:create'), 
+        ($1, 'member:delete')",
+        role_record.id
     )
     .execute(&mut *tx)
     .await?;
-
 
     sqlx::query!(
         "INSERT INTO memberships (user_id, organization_id, role_id) VALUES ($1, $2, $3)",
-                 current_user_id,
-                 org.id,
-                 role_record.id
+        current_user_id,
+        org.id,
+        role_record.id
     )
     .execute(&mut *tx)
     .await?;
-
 
     tx.commit().await?;
 
@@ -147,7 +151,6 @@ pub async fn update_organization(
     Path(org_id): Path<i64>,
     Json(payload): Json<UpdateOrgPayload>,
 ) -> Result<Json<Organization>, AppError> {
-    // --- THE AUTHORIZATION ENGINE IN ACTION ---
     let is_authorized =
         has_permission(&state.pool, current_user_id, org_id, "organization:update").await?;
 
