@@ -25,11 +25,10 @@ chrono = { version = "0.4", features = ["serde"] }
 
 thiserror = "2"
 anyhow = "1"
-
 jsonwebtoken = "9"
-argon2 = "0.5.3"
-rand = "0.8.5"
 
+argon2 = "0.5.3" 
+rand = "0.8.5"
 dotenvy = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
